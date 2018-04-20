@@ -5,15 +5,19 @@ import numpy as np
 from skimage.feature import local_binary_pattern
 from skimage.color import rgb2gray
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import normalize
-from sklearn import linear_model
+from sklearn import linear_model, metrics, preprocessing
+
+from joblib import Parallel, delayed
+import multiprocessing
 
 
-def feature_extraction(img):
-    img_greyscale = rgb2gray(img)
-    lbp = local_binary_pattern(img_greyscale, n_points, radius, 'ror')
+def feature_extraction(img_path):
+    print(img_path)
+    img = cv2.imread(img_path)
+    img = rgb2gray(img)
+    lbp = local_binary_pattern(img, n_points, radius, 'ror')
     (hist, _, _) = plt.hist(lbp.ravel(), bins=255, range=(0, 256))
-    #plt.show()
+    # plt.show()
     return hist
 
 
@@ -26,22 +30,37 @@ dirName = 'train'
 classes = listdir(dirName)
 classesDic = dict(zip(classes, range(len(classes))))
 
-trainSamples = []
+completeFilesPath = []
 trainClasses = []
+
+num_cores = multiprocessing.cpu_count()
+
 for clazz in classes:
-    print(clazz)
     for image in listdir(dirName + '/' + clazz):
-        print(image)
-        completeFilePath = dirName + '/' + clazz + '/' + image
-        img = cv2.imread(completeFilePath)
-        sample = feature_extraction(img)
-        trainSamples.append([sample])
-        trainClasses.append([classesDic[clazz]])
+        if len(completeFilesPath)>=10*(classesDic[clazz]+1): break
+        completeFilesPath.append(dirName + '/' + clazz + '/' + image)
+        trainClasses.append(classesDic[clazz])
+
+
+print(trainClasses)
+if path.isfile("LBP.npy"):
+    trainSamples = np.load("LBP.npy")
+else:
+    trainSamples = Parallel(n_jobs=num_cores)(
+        delayed(feature_extraction)(i) for i in completeFilesPath)
+
+    trainSamples = preprocessing.normalize(np.array(trainSamples), axis=1)
+    np.save("LBP.npy", trainSamples)
 
 # independently normalize each sample
-trainSamples = normalize(np.array(trainSamples), axis=1)
 trainClasses = np.array(trainClasses)
 
 logreg = linear_model.LogisticRegressionCV(Cs=10, cv=5, dual=False, penalty='l2', n_jobs=-1)
 
 logreg.fit(trainSamples, trainClasses)
+
+pred = logreg.predict(trainSamples)
+
+print(metrics.confusion_matrix(trainClasses, pred))
+
+
