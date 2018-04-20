@@ -3,9 +3,10 @@ from os import listdir, path, makedirs
 
 import numpy as np
 from skimage.feature import local_binary_pattern
-from skimage import io
 from skimage.color import rgb2gray
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import normalize
+from sklearn import linear_model
 
 
 def feature_extraction(img):
@@ -28,12 +29,19 @@ classesDic = dict(zip(classes, range(len(classes))))
 trainSamples = []
 trainClasses = []
 for clazz in classes:
+    print(clazz)
     for image in listdir(dirName + '/' + clazz):
+        print(image)
         completeFilePath = dirName + '/' + clazz + '/' + image
         img = cv2.imread(completeFilePath)
         sample = feature_extraction(img)
         trainSamples.append([sample])
         trainClasses.append([classesDic[clazz]])
 
-trainSamples = np.array(trainSamples)
+# independently normalize each sample
+trainSamples = normalize(np.array(trainSamples), axis=1)
 trainClasses = np.array(trainClasses)
+
+logreg = linear_model.LogisticRegressionCV(Cs=10, cv=5, dual=False, penalty='l2', n_jobs=-1)
+
+logreg.fit(trainSamples, trainClasses)
