@@ -1,3 +1,5 @@
 imagens_objetos_coloridos_results/
 venv/
 .idea/
+*.npy
+train/
