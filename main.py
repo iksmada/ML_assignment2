@@ -71,6 +71,7 @@ logreg.fit(X_train, y_train)
 
 pred = logreg.predict(X_test)
 
-print(metrics.confusion_matrix(y_test, pred))
+print(classesDic)
+print(metrics.confusion_matrix(y_test, pred, [k for k in classesDic.values()]))
 print(metrics.accuracy_score(y_test, pred))
 print(metrics.classification_report(y_test, pred, [k for k in classesDic.values()], [k for k in classesDic.keys()]))
