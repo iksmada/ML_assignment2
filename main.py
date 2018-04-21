@@ -2,10 +2,9 @@ import cv2
 from os import listdir, path, makedirs
 
 import numpy as np
-from skimage.feature import local_binary_pattern
-from skimage.color import rgb2gray
-import matplotlib.pyplot as plt
+from skimage.restoration import denoise_wavelet
 from sklearn import linear_model, metrics, preprocessing, model_selection
+from scipy.stats import moment
 
 from joblib import Parallel, delayed
 import multiprocessing
@@ -14,15 +13,18 @@ import multiprocessing
 def feature_extraction(img_path):
     print(img_path)
     img = cv2.imread(img_path)
-    img = rgb2gray(img)
-    lbp = local_binary_pattern(img, n_points, radius, 'ror')
-    (hist, _, _) = plt.hist(lbp.ravel(), bins=255, range=(0, 256))
-    # plt.show()
-    return hist
+    deionised = denoise_wavelet(img, multichannel=True)
+    finger_print = img * (deionised - img) / img**2
+    return [moment(finger_print[:, :, 0], moment=1),
+            moment(finger_print[:, :, 0], moment=2),
+            moment(finger_print[:, :, 0], moment=3),
+            moment(finger_print[:, :, 1], moment=1),
+            moment(finger_print[:, :, 1], moment=2),
+            moment(finger_print[:, :, 1], moment=3),
+            moment(finger_print[:, :, 2], moment=1),
+            moment(finger_print[:, :, 2], moment=2),
+            moment(finger_print[:, :, 2], moment=3)]
 
-# settings for LBP
-radius = 1
-n_points = 8 * radius
 
 dirName = 'train'
 classes = listdir(dirName)
@@ -37,14 +39,14 @@ for clazz in classes:
     classPaths = []
     print("Creating paths on class " + str(classesDic[clazz]))
     for image in listdir(dirName + '/' + clazz):
-        # if len(classPaths)>10: break
+        if len(classPaths)>=50: break
         classPaths.append(dirName + '/' + clazz + '/' + image)
         trainClasses.append(classesDic[clazz])
     completeFilesPath.append(classPaths)
 
 for clazz in classes:
     print("Preprocessing class " + str(classesDic[clazz]))
-    fileName = "LBP_" + clazz + ".npy"
+    fileName = "SPN_" + clazz + ".npy"
     if path.isfile(fileName):
         clazzSamples = np.load(fileName)
     else:
