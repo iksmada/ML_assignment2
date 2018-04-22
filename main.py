@@ -2,10 +2,8 @@ from os import listdir, path, makedirs
 
 import numpy as np
 from skimage.restoration import denoise_wavelet
-from skimage import io, measure, feature;
-
-io.use_plugin('matplotlib')
-from sklearn import linear_model, metrics, model_selection
+from skimage import io, measure, feature;io.use_plugin('matplotlib')
+from sklearn import linear_model, metrics, model_selection, feature_extraction, decomposition
 from scipy import ndimage
 
 from joblib import Parallel, delayed
@@ -37,7 +35,7 @@ def centeredCrop(img, new_height, new_width):
     return c_img
 
 
-def feature_extraction(img_path):
+def feature_extract(img_path):
     print(img_path)
     img = io.imread(img_path)
     img = centeredCrop(img, 500, 500)
@@ -63,7 +61,20 @@ def feature_extraction(img_path):
                 shift, error, diffphase = feature.register_translation(finger_print[:, :, colors[0]], offset_image)
                 features_correlation.append(diffphase)
 
-    return np.append(features_moment, np.array(features_correlation))
+    features = np.append(features_moment, np.array(features_correlation))
+
+    features_covariance = np.zeros(8)
+    for k in [2, 3]:
+        blocks = feature_extraction.image.extract_patches(finger_print, (k, k, 3), k)
+        blocks = blocks.ravel()
+        blocks = np.split(blocks, len(blocks)//(3*k**2))
+        pca = decomposition.PCA(n_components=4)
+        pca.fit(blocks)
+        features_covariance[(k-2)*4:(k-2)*4+4] = pca.singular_values_
+
+    features = np.append(features, features_covariance)
+
+    return features
 
 
 dirName = 'train'
@@ -91,7 +102,7 @@ for clazz in classes:
         clazzSamples = np.load(fileName)
     else:
         clazzSamples = Parallel(n_jobs=num_cores)(
-            delayed(feature_extraction)(i) for i in completeFilesPath[classesDic[clazz]])
+            delayed(feature_extract)(i) for i in completeFilesPath[classesDic[clazz]])
         clazzSamples = np.array(clazzSamples)
         np.save(fileName, clazzSamples)
 
