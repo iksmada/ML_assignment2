@@ -30,15 +30,25 @@ def feature_extraction(img_path):
     finger_print = img.astype('float') * (img.astype('float') - deionised.astype('float')) / (img.astype('float')**2)
     finger_print = np.nan_to_num(finger_print, copy=False)
     #finger_print = rescale(finger_print, 0., 1.)
-    features = np.zeros((7*3))
-    for i in range(3):
-        m = measure.moments(finger_print[:, :, i], order=5)
-        cr = m[0, 1] / m[0, 0]
-        cc = m[1, 0] / m[0, 0]
-        mc = measure.moments_central(finger_print[:, :, i], cr, cc, order=5)
-        mn = measure.moments_normalized(mc)
-        mu = measure.moments_hu(mn)
-        features[i*7:i*7+7] = mu
+    # features = np.zeros((7*3))
+    # for i in range(3):
+    #     m = measure.moments(finger_print[:, :, i], order=5)
+    #     cr = m[0, 1] / m[0, 0]
+    #     cc = m[1, 0] / m[0, 0]
+    #     mc = measure.moments_central(finger_print[:, :, i], cr, cc, order=5)
+    #     mn = measure.moments_normalized(mc)
+    #     mu = measure.moments_hu(mn)
+    #     features[i*7:i*7+7] = mu
+
+    features = []
+    for colors in [(0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)]:
+            for delta_i in range(4):
+                for delta_j in range(4):
+                    offset_image = ndimage.shift(finger_print[:, :, colors[1]], (delta_i, delta_j))
+                    shift, error, diffphase = feature.register_translation(finger_print[:, :, colors[0]], offset_image)
+                    features.append(diffphase)
+
+    return np.array(features)
 
 
 dirName = 'train'
