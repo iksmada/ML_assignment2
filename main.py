@@ -1,4 +1,3 @@
-import cv2
 from os import listdir, path, makedirs
 
 import numpy as np
@@ -72,6 +71,9 @@ logreg.fit(X_train, y_train)
 pred = logreg.predict(X_test)
 
 print(classesDic)
-print(metrics.confusion_matrix(y_test, pred, [k for k in classesDic.values()]))
+cm = metrics.confusion_matrix(y_test, pred, [k for k in classesDic.values()])
+cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+np.set_printoptions(formatter={'float': lambda x: "{0:0.2f}".format(x)})
+print(cm)
 print(metrics.accuracy_score(y_test, pred))
 print(metrics.classification_report(y_test, pred, [k for k in classesDic.values()], [k for k in classesDic.keys()]))
