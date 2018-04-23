@@ -74,16 +74,16 @@ def feature_extract(img_path):
 
     features = np.append(features, features_covariance)
 
-    error = np.mean(finger_print[:, :, 0], axis=1)
     correlation = []
-    for i in range(len(error)):
-        correlation.append(np.correlate(error, np.roll(error, i), "same"))
+    for color in range(3):
+        error = np.mean(finger_print[:, :, color], axis=1)
+        cor = []
+        for i in range(len(error)):
+            cor.append(np.correlate(error, np.roll(error, i)))
+        correlation.append(np.array(cor).mean())
+        correlation.append(np.array(cor).var())
 
-    pca = decomposition.PCA(n_components=8)
-    pca.fit(correlation)
-    features_covariance = pca.singular_values_
-
-    features = np.append(features, features_covariance)
+    features = np.append(features, np.array(correlation))
 
     return features
 
