@@ -35,6 +35,14 @@ def centeredCrop(img, new_height, new_width):
     return c_img
 
 
+def create_finger_print(img_path):
+    print(img_path)
+    img = io.imread(img_path)
+    img = centeredCrop(img, 504, 504)
+    deionised = denoise_wavelet(img, multichannel=True, )
+    return img.astype('float') * (img.astype('float') - deionised.astype('float')), (img.astype('float') ** 2)
+
+
 def feature_extract(img_path):
     print(img_path)
     img = io.imread(img_path)
@@ -104,8 +112,24 @@ for clazz in classes:
     completeFilesPath.append(classPaths)
 
 for clazz in classes:
+    print("Creating Finger print class " + str(classesDic[clazz]))
+    fileName = "SPN_FP_" + clazz + ".npy"
+    if path.isfile(fileName):
+        fingerPrintSamples = np.load(fileName)
+    else:
+        fingerPrintSamples = Parallel(n_jobs=num_cores)(
+            delayed(create_finger_print)(i) for i in completeFilesPath[classesDic[clazz]])
+        fingerPrintSamples = np.array(fingerPrintSamples)
+        np.save(fileName, fingerPrintSamples)
+
+    if 'trainSamples' not in locals():
+        trainSamples = clazzSamples
+    else:
+        trainSamples = np.append(trainSamples, clazzSamples, axis=0)
+
+for clazz in classes:
     print("Preprocessing class " + str(classesDic[clazz]))
-    fileName = "SPN_" + clazz + ".npy"
+    fileName = "SPN2_" + clazz + ".npy"
     if path.isfile(fileName):
         clazzSamples = np.load(fileName)
     else:
