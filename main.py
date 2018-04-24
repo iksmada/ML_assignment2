@@ -2,7 +2,7 @@ from os import listdir, path, makedirs
 
 import numpy as np
 from skimage.restoration import denoise_wavelet
-from skimage import io, measure, feature;io.use_plugin('matplotlib')
+from skimage import io, measure, feature, img_as_float;io.use_plugin('matplotlib')
 from sklearn import linear_model, metrics, model_selection, feature_extraction, decomposition
 from scipy import ndimage
 
@@ -48,7 +48,7 @@ def feature_extract(img_path):
     img = io.imread(img_path)
     img = centeredCrop(img, 504, 504)
     deionised = denoise_wavelet(img, multichannel=True, )
-    finger_print = img.astype('float') * (img.astype('float') - deionised.astype('float')) / (img.astype('float') ** 2)
+    finger_print = img_as_float(img) * (img_as_float(img) - deionised) / (img_as_float(img) ** 2)
     finger_print = np.nan_to_num(finger_print, copy=False)
     finger_print = rescale(finger_print, 0., 1.)
     features_moment = np.zeros((7*3))
