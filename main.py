@@ -35,62 +35,32 @@ def centeredCrop(img, new_height, new_width):
     return c_img
 
 
-def create_finger_print(img_path):
+def create_finger_print(img_path, isUp):
     print(img_path)
     img = io.imread(img_path)
     img = centeredCrop(img, 504, 504)
-    deionised = denoise_wavelet(img, multichannel=True, )
-    return img.astype('float') * (img.astype('float') - deionised.astype('float')), (img.astype('float') ** 2)
+    if isUp:
+        deionised = denoise_wavelet(img, multichannel=True, )
+        return img_as_float(img) * (img_as_float(img) - deionised)#, (img_as_float(img) ** 2)
+    else:
+        return img_as_float(img) ** 2
 
 
 def feature_extract(img_path):
     print(img_path)
     img = io.imread(img_path)
     img = centeredCrop(img, 504, 504)
-    deionised = denoise_wavelet(img, multichannel=True, )
-    finger_print = img_as_float(img) * (img_as_float(img) - deionised) / (img_as_float(img) ** 2)
-    finger_print = np.nan_to_num(finger_print, copy=False)
-    finger_print = rescale(finger_print, 0., 1.)
-    features_moment = np.zeros((7*3))
-    for i in range(3):
-        m = measure.moments(finger_print[:, :, i], order=5)
-        cr = m[0, 1] / m[0, 0]
-        cc = m[1, 0] / m[0, 0]
-        mc = measure.moments_central(finger_print[:, :, i], cr, cc, order=5)
-        mn = measure.moments_normalized(mc)
-        mu = measure.moments_hu(mn)
-        features_moment[i*7:i*7+7] = mu
 
+    # for color in range(3):
+    #     for i in range(len(trainFingerPrint)):
+    #         cor[i+color*len(trainFingerPrint)] = np.correlate(img[:, :, color], trainFingerPrint[i][:, :, color])
     features_correlation = []
     for colors in [(0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)]:
-        for delta_i in range(4):
-            for delta_j in range(4):
-                offset_image = ndimage.shift(finger_print[:, :, colors[1]], (delta_i, delta_j))
-                shift, error, diffphase = feature.register_translation(finger_print[:, :, colors[0]], offset_image)
-                features_correlation.append(diffphase)
+        for i in range(len(trainFingerPrint)):
+            shift, error, diffphase = feature.register_translation(img[:, :, colors[0]], trainFingerPrint[i][:, :, colors[1]])
+            features_correlation.append(diffphase)
 
-    features = np.append(features_moment, np.array(features_correlation))
-
-    features_covariance = np.zeros((3*2**2)**2+(3*3**2)**2)
-    for k in [2, 3]:
-        blocks = feature_extraction.image.extract_patches(finger_print, (k, k, 3), k)
-        blocks = blocks.ravel()
-        blocks = np.split(blocks, len(blocks)//(3*k**2))
-        features_covariance[(k-2)*((3*(k-1)**2)**2):(k-2)*((3*(k-1)**2)**2)+((3*k**2)**2)] = np.cov(blocks, rowvar=False).ravel()
-
-    features = np.append(features, features_covariance)
-
-    correlation = []
-    for color in range(3):
-        error = np.mean(finger_print[:, :, color], axis=1)
-        cor = np.zeros(len(error))
-        for i in range(len(error)):
-            cor[i] = np.correlate(error, np.roll(error, i))
-        cor = np.mean(np.split(cor, 8), axis=1)
-
-    features = np.append(features, cor)
-
-    return features
+    return np.array(features_correlation)
 
 
 dirName = 'train'
@@ -106,26 +76,29 @@ for clazz in classes:
     classPaths = []
     print("Creating paths on class " + str(classesDic[clazz]))
     for image in listdir(dirName + '/' + clazz):
-        if len(classPaths) >= 20: break
+        if len(classPaths) >= 50: break
         classPaths.append(dirName + '/' + clazz + '/' + image)
         trainClasses.append(classesDic[clazz])
     completeFilesPath.append(classPaths)
 
+trainFingerPrint = []
 for clazz in classes:
     print("Creating Finger print class " + str(classesDic[clazz]))
-    fileName = "SPN_FP_" + clazz + ".npy"
+    fileName = "SPN2_FP_" + clazz + ".npy"
     if path.isfile(fileName):
         fingerPrintSamples = np.load(fileName)
     else:
-        fingerPrintSamples = Parallel(n_jobs=num_cores)(
-            delayed(create_finger_print)(i) for i in completeFilesPath[classesDic[clazz]])
-        fingerPrintSamples = np.array(fingerPrintSamples)
+        up = Parallel(n_jobs=num_cores)(
+            delayed(create_finger_print)(i, True) for i in completeFilesPath[classesDic[clazz]])
+        up = np.sum(up, 0)
+        down = Parallel(n_jobs=num_cores)(
+            delayed(create_finger_print)(i, False)for i in completeFilesPath[classesDic[clazz]])
+        down = np.sum(down, 0)
+        fingerPrintSamples = up / down
+        fingerPrintSamples = np.nan_to_num(fingerPrintSamples, copy=False)
         np.save(fileName, fingerPrintSamples)
 
-    if 'trainSamples' not in locals():
-        trainSamples = clazzSamples
-    else:
-        trainSamples = np.append(trainSamples, clazzSamples, axis=0)
+    trainFingerPrint.append(fingerPrintSamples)
 
 for clazz in classes:
     print("Preprocessing class " + str(classesDic[clazz]))
@@ -143,14 +116,6 @@ for clazz in classes:
     else:
         trainSamples = np.append(trainSamples, clazzSamples, axis=0)
 
-# apply PCA
-pca = decomposition.PCA(n_components=4)
-trainSamples[:, 7+0*4:7+1*4] = pca.fit_transform(trainSamples[:, 7+0*4:7+0*4 +  96])
-trainSamples = np.delete(trainSamples, range(7+1*4,  96+7+0*4), 1)
-trainSamples[:, 7+1*4:7+2*4] = pca.fit_transform(trainSamples[:, 7+1*4:7+1*4 + 144])
-trainSamples = np.delete(trainSamples, range(7+2*4, 144+7+1*4), 1)
-trainSamples[:, 7+2*4:7+3*4] = pca.fit_transform(trainSamples[:, 7+2*4:7+2*4 + 729])
-trainSamples = np.delete(trainSamples, range(7+3*4, 729+7+2*4), 1)
 trainClasses = np.array(trainClasses)
 
 
