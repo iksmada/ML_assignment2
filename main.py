@@ -38,7 +38,7 @@ def centeredCrop(img, new_height, new_width):
 def feature_extract(img_path):
     print(img_path)
     img = io.imread(img_path)
-    img = centeredCrop(img, 500, 500)
+    img = centeredCrop(img, 504, 504)
     deionised = denoise_wavelet(img, multichannel=True, )
     finger_print = img.astype('float') * (img.astype('float') - deionised.astype('float')) / (img.astype('float') ** 2)
     finger_print = np.nan_to_num(finger_print, copy=False)
@@ -63,27 +63,24 @@ def feature_extract(img_path):
 
     features = np.append(features_moment, np.array(features_correlation))
 
-    features_covariance = np.zeros(8)
+    features_covariance = np.zeros((3*2**2)**2+(3*3**2)**2)
     for k in [2, 3]:
         blocks = feature_extraction.image.extract_patches(finger_print, (k, k, 3), k)
         blocks = blocks.ravel()
         blocks = np.split(blocks, len(blocks)//(3*k**2))
-        pca = decomposition.PCA(n_components=4)
-        pca.fit(blocks)
-        features_covariance[(k-2)*4:(k-2)*4+4] = pca.singular_values_
+        features_covariance[(k-2)*((3*(k-1)**2)**2):(k-2)*((3*(k-1)**2)**2)+((3*k**2)**2)] = np.cov(blocks, rowvar=False).ravel()
 
     features = np.append(features, features_covariance)
 
     correlation = []
     for color in range(3):
         error = np.mean(finger_print[:, :, color], axis=1)
-        cor = []
+        cor = np.zeros(len(error))
         for i in range(len(error)):
-            cor.append(np.correlate(error, np.roll(error, i)))
-        correlation.append(np.array(cor).mean())
-        correlation.append(np.array(cor).var())
+            cor[i] = np.correlate(error, np.roll(error, i))
+        cor = np.mean(np.split(cor, 8), axis=1)
 
-    features = np.append(features, np.array(correlation))
+    features = np.append(features, cor)
 
     return features
 
@@ -122,8 +119,16 @@ for clazz in classes:
     else:
         trainSamples = np.append(trainSamples, clazzSamples, axis=0)
 
-# independently normalize each sample
+# apply PCA
+pca = decomposition.PCA(n_components=4)
+trainSamples[:, 7+0*4:7+1*4] = pca.fit_transform(trainSamples[:, 7+0*4:7+0*4 +  96])
+trainSamples = np.delete(trainSamples, range(7+1*4,  96+7+0*4), 1)
+trainSamples[:, 7+1*4:7+2*4] = pca.fit_transform(trainSamples[:, 7+1*4:7+1*4 + 144])
+trainSamples = np.delete(trainSamples, range(7+2*4, 144+7+1*4), 1)
+trainSamples[:, 7+2*4:7+3*4] = pca.fit_transform(trainSamples[:, 7+2*4:7+2*4 + 729])
+trainSamples = np.delete(trainSamples, range(7+3*4, 729+7+2*4), 1)
 trainClasses = np.array(trainClasses)
+
 
 X_train, X_test, y_train, y_test = model_selection.train_test_split(trainSamples, trainClasses, train_size=0.8)
 
